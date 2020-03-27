@@ -1,13 +1,30 @@
-\chapter{时域积分方程基础}
+\chapter{NB-IOT通信技术基础}
 时域积分方程（TDIE）方法作为分析瞬态电磁波动现象最主要的数值算法之一，常用于求解均匀散射体和表面散射体的瞬态电磁散射问题。
 
-\section{时域积分方程的类型}
+\section{AT指令}
+AT指令集用于从终端设备或数据终端设备通过终端适配器向控制移动台发送控制指令，3GPP TS 27.007 规定了用于控制GSM手机或者modem的AT命令，比如 AT+CIMI 用于获取设备的IMEI（Intemational Mobile Subscriber Identity）,AT+CSQ 用于获取信号强度；3GPP TS 27.005 规定了管理GSM和SMS短信功能的指令，例如AT+CNGC用于发送SMS短信；模块通用指令比如 AT+NRB用于重启模块；还有用于特定IOT平台的命令，比如AT+NCDP用于查询华为IOT平台CDP服务器的IP/端口。
+AT指令为以下四种形式（补充图片）
 
-\section{空间基函数与时间基函数}
-利用数值算法求解时域积分方程，首先需要选取适当的空间基函数与时间基函数对待求感应电流进行离散。
+\section{NB-IOT模块的工作状态}
+NB-IOT省电的特点，很大程度得益于3种工作模式的切换，通过牺牲一定的实时性，停止一部分功能，从而达到省电目的。NB-IOT三种工作模式的切换如下图所示（补充图片）
+当NB-IOT模块注册入网后，处于connected态，此时模块可以收发数据，当无上行数据后，启动不活动定时器，到期后进入IDLE态，开始TAU计时，关闭发射，保留接收功能，可对下行数据进行处理，如有下行激活指令，则切换到connected态，否则active timeer到期后进入PSM态，关闭收发功能，仅保留必要的时钟。TAU到期后切换到connected态
 
-\subsection{空间基函数}
-RWG 基函数是定义在三角形单元上的最具代表性的基函数。它的具体定义如下：
+\section{工作频段}
+NB-IOT沿用LTEd定义的频段号，Release 13 为NB-IOT制定了14个频段，国内运营商的NB-IOT设备主要运行在band 5 和 band 8（补充图片）
+
+\section{部署方式}
+NB-IOT支持带外、带内和保护带部署三种方式
+
+\section{信令协议}
+
+\section{应用层协议}
+
+\subsection{CoAP}
+
+\subsection{MQTT}
+
+\subsection{CoAP和MQTT的异同}
+
 \begin{equation}
 f_n(\bm{r})=
 \begin{cases}
