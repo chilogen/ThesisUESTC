@@ -1,5 +1,5 @@
 \chapter{NB-IOT通信技术基础}
-时域积分方程（TDIE）方法作为分析瞬态电磁波动现象最主要的数值算法之一，常用于求解均匀散射体和表面散射体的瞬态电磁散射问题。
+
 
 \section{AT指令}
 AT指令集用于从终端设备或数据终端设备通过终端适配器向控制移动台发送控制指令，3GPP TS 27.007 规定了用于控制GSM手机或者modem的AT命令，比如 AT+CIMI 用于获取设备的IMEI（Intemational Mobile Subscriber Identity）,AT+CSQ 用于获取信号强度；3GPP TS 27.005 规定了管理GSM和SMS短信功能的指令，例如AT+CNGC用于发送SMS短信；模块通用指令比如 AT+NRB用于重启模块；还有用于特定IOT平台的命令，比如AT+NCDP用于查询华为IOT平台CDP服务器的IP/端口。
@@ -26,7 +26,7 @@ NB-IOT省电的特点，很大程度得益于3种工作模式的切换，通过�
 当NB-IOT模块注册入网后，处于connected态，此时模块可以收发数据，当无上行数据后，启动不活动定时器，到期后进入IDLE态，开始TAU计时，关闭发射，保留接收功能，可对下行数据进行处理，如有下行激活指令，则切换到connected态，否则active timeer到期后进入PSM态，关闭收发功能，仅保留必要的时钟。TAU到期后切换到connected态
 
 \section{工作频段}
-NB-IOT沿用LTEd定义的频段号，Release 13 为NB-IOT制定了14个频段，国内运营商的NB-IOT设备主要运行在band 5 和 band 8
+无线电频谱作为一种资源，由国家统一分配。相比于其它的LPWAN技术，NBIOT的一大优势就是它运行于授权频段，拥有较少的频段干扰，可以提供更好的服务质量。NB-IOT沿用LTEd定义的标准，能与现有的蜂窝网络基站融合快速部署，全球主流的部署频段是800MHz和900MHz，在中国，中国电信将NBIOT部署在800MHz的频段上，而中国移动和中国联通则吧NBIOT部署在900MHz的频段上。
 
 
 \begin{table}[h!]
@@ -34,7 +34,7 @@ NB-IOT沿用LTEd定义的频段号，Release 13 为NB-IOT制定了14个频段，
 \begin{tabular}{ccccc}
 \toprule
 频段&中心频率&上行频率&下行频率&\multirow{2}{*}{运营商}\\
-(MHZ)&(MHZ)&(MHZ)&(MHZ)&\\
+&(MHZ)&(MHZ)&(MHZ)&\\
 \midrule
 Band 5&850&824-849&869-894&中国电信\\
 \midrule
@@ -46,10 +46,14 @@ Band 8&900&880-915&925-960&\makecell[c]{中国移动\\中国联通}\\
 
 
 \section{部署方式}
-NB-IOT支持带外、带内和保护带部署三种方式
+NB-IOT支持独立、频段内、保护频段三种部署方式。
+独立部署不依赖于LTE，利用 GSM 200KHz的信道带宽
 
-\section{信令协议}
 
+\section{物理层协议}
+
+%https://blog.csdn.net/Simon_csx/article/details/79378337
+NBIOT上行采用SC-FDMA多址方式，使用多载波和单载波两种传输方式。多载波适用于LTE相同的15khz子载波间隔，0.5ms时隙，1ms子帧长度，每个时隙包含7个符号
 \section{应用层协议}
 
 物联网设备多为系统资源受限设备，对网络的要求也与普通互联网应用有很大不同。目前流行的为物联网受限设备设计的应用层协议主要是CoAP、MQTT-SN、XMPP、AMQP等（TODO:引用）。接下来对应用更为广泛的CoAP和MQTT协议进行对比。
@@ -86,37 +90,27 @@ Token&&可选，长度为TKL，用于消息安全性或对应一个请求和响�
 
 MQTT是一种发布/订阅传输协议，基于TCP/IP协议栈构建，具有低开销，低带宽占用的优点，协议中有三种身份：publisher、broker和subcriber，broker起到解耦合的作用。MQTT提供三种消息传递的服务质量水平：
 
-\begin{table}[h!]
-\caption{MQTT服务质量}
-\begin{tabular}{cc}
-\toprule
-值 & 解释 \\
-\midrule
-0 & a \\
-1 & b \\
-2 & c \\
-\bottomrule
-\end{tabular}
-\label{tablea}
-\end{table}
+Qos 0 代表消息至多会传输一次，因为NBIOT底层依赖于不可靠的UDP传输，所以会发生消息的丢失。
+
+Qos 1 代表消息至少会传输一次，但因为重发机制可能会导致消息重复。
+
+Qos 2 代表q确保消息会到达一次，保证不会出现消息丢或重复的现象，适用于非幂等的请求传输。
+
+%\begin{table}[h!]
+%\caption{MQTT服务质量}
+%\begin{tabular}{cc}
+%\toprule
+%值 & 解释 \\
+%\midrule
+%Qos 0 & 至多一次 \\
+%Qos & 至少一次 \\
+%Qos & 只有一次 \\
+%\bottomrule
+%\end{tabular}
+%\label{tablea}
+%\end{table}
 
 
-
-\begin{table}[h]
-\caption{计算$2m\times 2m$理想导体平板时域感应电流采用的三种存储方式的存储量比较。}
-\begin{tabular}{cccc}
-\toprule
-\multirow{2}{*}{时间步长} & \multicolumn{3}{c}{存储方式} \\
-\cmidrule{2-4}
-& 非压缩存储方式 & 完全压缩存储方式 & 基权函数压缩存储方式 \\
-\midrule
-0.4ns & 5.59 MB & 6.78 MB & 6.78 MB\\
-0.5ns & 10.17 MB & 5.58 MB & 5.58 MB \\
-0.6ns & 8.38MB & 4.98 MB & 4.98 MB \\
-\bottomrule
-\end{tabular}
-\label{tablea}
-\end{table}
 
 \begin{figure}[h]
 	\includegraphics[width=12cm]{MQTT报文.png}
@@ -149,61 +143,5 @@ Remaining Length&&\makecell[c]{剩余长度表示当前报文余下的负载数
   
   MQTT不支持带有类型或者其它帮助Clients理解的标签消息，CoAP内置内容协商和发现支持，允许设备彼此窥测以找到交换数据的方式。
 
-\begin{equation}
-f_n(\bm{r})=
-\begin{cases}
-\frac{l_n}{2A_n^+}\bm{\rho}_n^+=\frac{l_n}{2A_n^+}(\bm{r}-\bm{r}_+)&\bm{r}\in T_n^+\\
-\frac{l_n}{2A_n^-}\bm{\rho}_n^-=\frac{l_n}{2A_n^-}(\bm{r}_--\bm{r})&\bm{r}\in T_n^-\\
-0&\text{otherwise}
-\end{cases}
-\end{equation}
-
-其中，$l_n$为三角形单元$T_n^+$和$T_n^-$公共边的长度，$A_n^+$和$A_n^-$分别为三角形单元$T_n^+$和$T_n^-$的面积（如图\ref{pica}所示）。
-
-\begin{figure}[h]
-	\includegraphics{pica.pdf}
-	\caption{AT指令形式}
-	\label{p}
-\end{figure}
-
-由于时域混合场积分方程是时域电场积分方程与时域磁场积分方程的线性组合，因此时域混合场积分方程时间步进算法的阻抗矩阵特征与时域电场积分方程时间步进算法的阻抗矩阵特征相同。
-\begin{equation}
-\label{latent_binary_variable}
-\bm{r}_{i,j}=
-\begin{cases}
-1,f(\bm{x}^{i};\bm{w})\cdot f(\bm{x}^{j};\bm{w})\geq u(\lambda),\\
-0,f(\bm{x}^{i};\bm{w})\cdot f(\bm{x}^{j};\bm{w})< l(\lambda), 1\leq i,j\leq n.\\
-f(\bm{x}^{i};\bm{w})\cdot f(\bm{x}^{j};\bm{w}),\text{otherwise},
-\end{cases}
-\end{equation}
-
-时域积分方程时间步进算法的阻抗元素直接影响算法的后时稳定性，因此阻抗元素的计算是算法的关键之一，采用精度高效的方法计算时域阻抗元素是时域积分方程时间步进算法研究的重点之一。
-
-
-\subsection{时间基函数}
-
-\subsubsection{时域方法特有的展开函数}
-
-\subsubsection{频域方法特有的展开函数}
-
-\section{入射波}
-
-如图\ref{picb}和图\ref{picc}所示分别给出了参数$E_0=\hat{x}$，$a_n=-\hat{z}$，$f_0=250MHz$，$f_w=50MHz$，$t_w=4.2\sigma$时，调制高斯脉冲的时域与频域归一化波形图。
-
-\begin{figure}[h]
-\subfloat[]{
-	\label{picb}
-	\includegraphics[width=7.3cm]{picb.pdf}
-}
-\subfloat[]{
-	\label{picc}
-	\includegraphics[width=6.41cm]{picc.pdf}
-}
-\caption{调制高斯脉冲时域与频率波形，时域阻抗元素的存储技术也是时间步进算法并行化的关键技术之一，采用合适的阻抗元素存储方式可以很大的提高并行时间步进算法的计算效率。}
-\label{fig1}
-\end{figure}
-
-时域阻抗元素的存储技术\citing{xiao2012yi}也是时间步进算法并行化的关键技术之一，采用合适的阻抗元素存储方式可以很大的提高并行时间步进算法的计算效率。
 
 \section{本章小结}
-本章首先从时域麦克斯韦方程组出发推导得到了时域电场、磁场以及混合场积分方程。

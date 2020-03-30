@@ -3,7 +3,6 @@
 \section{模块总体介绍}
 
 上海移远通信技术有限公司开发的bc35G通信模组支持 band8、band5、band20、band28频段，采用LCC贴片封装，尺寸为19.9mm*23.6mm*2.2mm，完全符合欧盟RoHs标准（TODO：引用），外部参数如下：
-模块参数
 
 \begin{table}[h!]
 \caption{模块参数}
@@ -19,8 +18,6 @@
 \end{tabular}
 \label{模块参数}
 \end{table}
-
-模块总体
 
 \begin{figure}[h]
     \floatcontinue
@@ -43,42 +40,17 @@ BC35G天线部分预留了pi型匹配电路(TODO:图片),以便对天线性能�
 
 \section{USIM卡座}
 支持3GPP规范功能的USIM卡能接入运营商网络，USIM功能包括模块和卡座，为了确保USIM卡的性能以及避免与射频、电源模块的干扰，须遵循以下设计原则：
-卡座和模块尽量靠近，信号线不超过200mm保证信号品质
-信号线远离RF走线及VBAT
-防止USIM\_DATA和USIM\_CLK信号干扰，两线之间加入地屏蔽
-USIM\_DATA, USIM\_VDD, USIM\_CLK, 和USIM\_RST并联33pF电容滤除RF干扰
-为了防止静电，在卡座和模块之间增加TVS管
 
-USIM卡使用内部电源3v供电，引脚定义如下：（TODO:表格）
+\begin{enumerate}
+\item 卡座和模块尽量靠近，信号线不超过200mm保证信号品质
+\item 信号线远离RF走线及VBAT
+\item 防止USIM\_DATA和USIM\_CLK信号干扰，两线之间加入地屏蔽
+\item USIM\_DATA, USIM\_VDD, USIM\_CLK, 和USIM\_RST并联33pF电容滤除RF干扰
+\item 为了防止静电，在卡座和模块之间增加TVS管
+\end{enumerate}
+
+USIM卡使用内部电源3v供电，引脚定义如下
 
 USIM卡座电路图：(TODO:图片)
 
-\subsection{时域积分方程时间步进算法产生的阻抗矩阵的特征}
-由于时域混合场积分方程是时域电场积分方程与时域磁场积分方程的线性组合，因此时域混合场积分方程时间步进算法的阻抗矩阵特征与时域电场积分方程时间步进算法的阻抗矩阵特征相同。
-
-\subsection{数值算例与分析}
-
-如图3-1(a)所示给出了时间步长选取为0.5ns时采用三种不同存储方式计算的平板中心处 方向的感应电流值与IDFT方法计算结果的比较。如图3-1(b)所示给出了存储方式为基权函数压缩存储方式，时间步长分别取时平板中心处 方向的感应电流计算结果，从图中可以看出不同时间步长的计算结果基本相同。
-
-\begin{algorithm}[H]
- \KwData{this text}
- \KwResult{how to write algorithm with \LaTeX2e }
- initialization\;
- \While{not at end of this document}{
-  read current\;
-  \eIf{understand}{
-   go to next section\;
-   current section becomes this one\;
-   }{
-   go back to the beginning of current section\;
-  }
- }
- \caption{How to wirte an algorithm.}
-\end{algorithm}
-
-由于时域混合场积分方程是时域电场积分方程与时域磁场积分方程的线性组合，因此时域混合场积分方程时间步进算法的阻抗矩阵特征与时域电场积分方程时间步进算法的阻抗矩阵特征相同。
-
-\section{时域积分方程时间步进算法矩阵方程的求解}
-
 \section{本章小结}
-本章首先研究了时域积分方程时间步进算法的阻抗元素精确计算技术，分别采用DUFFY变换法与卷积积分精度计算法计算时域阻抗元素，通过算例验证了计算方法的高精度。
