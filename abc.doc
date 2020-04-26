@@ -1,0 +1,552 @@
+<p>NBIOT技术是用于物联网受限设备的一种通信技术、协议，属于低功耗广域网技术，具有覆盖广，能耗低，负载连接数巨大的优势，同时也用于解决5G eMTC的场景。本篇论文以BC35G模块为基础，讨论NBIOT相关通信技术以及模块设计思路，并在最后通过stm32开发板控制通信模块的方式，演示固定控制类物联网应用的开发流程以及实验。</p>
+<p>NBIOT technology is a communication technology and protocol for limited devices in the Internet of things, which belong to Low-Power Wide-Area Network technology, and has the advantages of wide coverage, low energy consumption and large number of load connections. It is also used to solve the scenario of massive Machine Type of communication in 5G. Based on BC35G module, this paper discusses NBIOT related communication technologies and module design ideas, and finally demonstrates the development process and experiment in stm32 development board for immobilization control Internet of things application.</p>
+<h1 id="研究工作的背景与意义">研究工作的背景与意义</h1>
+<p>物联网的概念自1999年提出以来就备受关注，随着物联网在各行业的需求逐渐被挖掘，物联网技术的研究和应用都得到了极大的发展。</p>
+<p>低功耗广域网(Low-Power Wide-Area Network, LPWNA)作为无物联网一个重要的应用分支，具有覆盖能力强，能耗低的特点。LoRa、Sigfox、NB-IoT等技术相继涌现<span class="citation"></span>，其中，NB-IOT由于其使用授权频谱等优势，收获了众多学者的关注和产生了许多行业应用，在5G标准中也占有一席之地。</p>
+<p>2015年9月，NB-CIoT(Narrow Band Celluar IoT）与爱立信的NB-LTE方案融合，形成了NB-IOT方案。华为、高通、爱立信的那个在同年12月合作提出的NB-IoTf方案，在2016年6月获得3GPP批准，并在2019年7月获得ITU确认，成为解决5G mMTC(massive Machine Type Communication)场景下的技术标准。</p>
+<p>在协议演进的过程中，研究人员通过对物理层的研究，对NB-IOT的功耗、传输时延、与LTE系统之间的干扰进行了分析与建模。比如 Migabo E等人的论文<span class="citation"></span>设计了NB-IOT下行链路的数学模型，通过理论分析和模拟了NB-IOT的预期能耗，同时讨论了数据传输速率以及网络传输时延的问题；Kim H等的论文<span class="citation"></span>对NB-IOT与线性通信系统的干扰进行了分析，提出在NB-IOT频带两侧设置保护带宽的建议。同时在网络构建与多技术融合方面也有很多成果。</p>
+<p>众多模块和芯片厂商也对NB-IOT技术的落地做了充足的准备。华为在收购Neul的基础上在2016年就展示了承载NB-IOT的Boudica芯片，上海移远通信技术有限公司也通过搭载该系列芯片开发出了BC95系列模组。</p>
+<p>运营商也根据工信部2020年NB-IOT网络实现全国普遍覆盖的要求，积极部署NB-IOT基站，目前中国电信拥有40余万个基站<span class="citation"></span>，联通和移动也紧随其后。</p>
+<p>本论文通过BC35G模块为例，总结阐述NBIOT协议与模块设计思路，并通过开发板控制模块通信，完成从理论、设计到验证实验的完整流程，对NBIOT技术形成一个整体认知，为NBIOT技术的学习提供实践。</p>
+<h1 id="本论文的结构安排">本论文的结构安排</h1>
+<p>论文总共分五章，结构安排如下：</p>
+<p>第一章绪论部分主要阐述NBIOT技术的产生与发展，内容包括几大通信技术公司联合提出协议规范，列举一些学者在物理层对NBIOT协议能耗、时延的研究，以及NBIOT在5G标准中扮演的角色。最终结合产业政策推动等产业因素，得出NBIOT技术将在未来得到蓬勃发展，导致集成模块的需求也会增加</p>
+<p>第二章主要说明NBIOT设计的技术及其通信规范，包括控制模块需要的AT指令集，NBIOT获得分配的通信频段，部署方式，工作方式以及对两个用于NBIOT的应用层协议（CoAP和MQTT）进行对比，从理论知识上理解NBIOT技术的能耗、时延等特点。</p>
+<p>第三章从模块设计出发，分析了bc35g模块的供电管理模块、射频前端模块、串口通信模块、USIM卡座模块等的设计原则和电路分析。</p>
+<p>第四章则是实验与验证部分，通过华为云平台、NBIOT模块、stm32开发板，验证NBIOT通信过程及探讨不同的NBIOT应用设计要求。</p>
+<p>第五章总结与展望未来工作。总结NBIOT通信规范以及模块设计，展望通过软件无线电技术研究NBIOT的工作。</p>
+<h1 id="nb-iot通信技术基础">NB-IOT通信技术基础</h1>
+<h2 id="at指令">AT指令</h2>
+<p>AT指令集用于从终端设备或数据终端设备通过终端适配器向控制移动台发送控制指令，3GPP TS 27.007 规定了用于控制GSM手机或者modem的AT命令，比如 AT+CIMI 用于获取设备的IMEI（Intemational Mobile Subscriber Identity）,AT+CSQ 用于获取信号强度；还管理GSM和SMS短信功能的指令，例如AT+CNGC用于发送SMS短信；另有模块通用指令比如 AT+NRB用于重启模块；还有用于特定IOT平台的命令，比如AT+NCDP用于查询华为IOT平台CDP服务器的IP/端口。 AT指令分为测试、读取、写、执行四类指令，形式如表[AT指令形式]</p>
+<table>
+<caption>AT指令形式</caption>
+<thead>
+<tr class="header">
+<th align="left">类型</th>
+<th align="left">形式</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">测试指令</td>
+<td align="left">AT+&lt;cmd&gt;=?</td>
+<td align="left">获取参数可能的值范围</td>
+</tr>
+<tr class="even">
+<td align="left">读取指令</td>
+<td align="left">AT+&lt;cmd&gt;?</td>
+<td align="left">读取参数值</td>
+</tr>
+<tr class="odd">
+<td align="left">写指令</td>
+<td align="left">AT+&lt;cmd&gt;=p1,[p2,[p3[......]]]</td>
+<td align="left">设置参数值</td>
+</tr>
+<tr class="even">
+<td align="left">执行指令</td>
+<td align="left">AT+&lt;cmd&gt;</td>
+<td align="left">执行命令</td>
+</tr>
+</tbody>
+</table>
+<p>[AT指令形式]</p>
+<h2 id="nb-iot模块的工作状态">NB-IOT模块的工作状态</h2>
+<p>NB-IOT省电的特点，很大程度得益于3种工作模式的切换，通过牺牲一定的实时性，停止一部分功能，从而达到省电目的。NB-IOT三种工作模式的切换如下图所示</p>
+<div class="figure">
+<img src="工作模式切换.png" alt="工作模式切换" width="302" />
+<p class="caption">工作模式切换<span data-label="工作模式切换"></span></p>
+</div>
+<p>当NB-IOT模块注册入网后，处于connected态，此时模块可以收发数据，当无上行数据后，启动不活动定时器，到期后进入IDLE态，开始TAU计时，关闭发射，保留接收功能，可对下行数据进行处理，如有下行激活指令，则切换到connected态，否则active timeer到期后进入PSM态，关闭收发功能，仅保留必要的时钟。TAU到期后切换到connected态</p>
+<p>对于不同场景下的的NB-IOT应用，通过选取合适的定时器时间及工作状态切换流程，能满足不同的实时性以及能耗的要求。比如固定的控制类物联网应用，由于有可靠的电源保障，对实时性的需求大于低能耗的需求，可以使模块一直保持在Active模式。</p>
+<h2 id="应用层协议">应用层协议</h2>
+<p>物联网设备多为系统资源受限设备，对网络的要求也与普通互联网应用有很大不同。目前流行的为物联网受限设备设计的应用层协议主要是CoAP、MQTT-SN、XMPP、AMQP等（TODO:引用）。接下来对应用较为广泛的CoAP和MQTT协议进行对比。</p>
+<h3 id="coap">CoAP</h3>
+<p>CoAP与http一样，基于REST架构的应用层协议，但传输层使用UDP替换，自身则是一个双层结构（消息层和请求响应层），并在消息层实现了多播、拥塞控制、消息可靠性保证等机制。作为一个轻量级协议，CoAP协议的最小报文仅为4字节.</p>
+<div class="figure">
+<img src="CoAP报文.png" alt="CoAP的消息格式" width="529" />
+<p class="caption">CoAP的消息格式<span data-label="CoAP报文"></span></p>
+</div>
+<table>
+<caption>CoAP字段</caption>
+<thead>
+<tr class="header">
+<th align="center">字段名</th>
+<th align="center">比特数</th>
+<th align="center">解释</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">Ver</td>
+<td align="center">2</td>
+<td align="center">代表协议版本，目前为 0x01</td>
+</tr>
+<tr class="even">
+<td align="center">Type</td>
+<td align="center">2</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center">TKL</td>
+<td align="center">4</td>
+<td align="center">Token 的长度，目前为 0 8B</td>
+</tr>
+<tr class="even">
+<td align="center">Code</td>
+<td align="center">8</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center">MessageID</td>
+<td align="center">16</td>
+<td align="center">消息ID，用于标记重发消息</td>
+</tr>
+<tr class="even">
+<td align="center">Token</td>
+<td align="center"></td>
+<td align="center">可选，长度为TKL，用于消息安全性或对应一个请求和响应</td>
+</tr>
+</tbody>
+</table>
+<p>[coap字段]</p>
+<h3 id="mqtt">MQTT</h3>
+<p>MQTT是一种发布/订阅传输协议，基于TCP/IP协议栈构建，具有低开销，低带宽占用的优点，协议中有三种身份：publisher、broker和subcriber，broker起到解耦合的作用。MQTT提供三种消息传递的服务质量水平：</p>
+<p>Qos 0 代表消息至多会传输一次，因为NBIOT底层依赖于不可靠的UDP传输，所以会发生消息的丢失。</p>
+<p>Qos 1 代表消息至少会传输一次，但因为重发机制可能会导致消息重复。</p>
+<p>Qos 2 代表q确保消息会到达一次，保证不会出现消息丢或重复的现象，适用于非幂等的请求传输。</p>
+<div class="figure">
+<img src="MQTT报文.png" alt="MQTT报文结构" width="453" />
+<p class="caption">MQTT报文结构<span data-label="MQTT报文"></span></p>
+</div>
+<table>
+<caption>MQTT报文字段</caption>
+<thead>
+<tr class="header">
+<th align="center">字段名</th>
+<th align="center">比特数</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">Control Packet type</td>
+<td align="center">4</td>
+<td align="left">控制报文类型,4位无符号数</td>
+</tr>
+<tr class="even">
+<td align="center">Flags</td>
+<td align="center">4</td>
+<td align="left"></td>
+</tr>
+<tr class="odd">
+<td align="center">Remaining Length</td>
+<td align="center"></td>
+<td align="left"></td>
+</tr>
+</tbody>
+</table>
+<p>[mqtt字段]</p>
+<h3 id="coap和mqtt的异同">CoAP和MQTT的异同</h3>
+<p>MQTT协议使用发布/订阅模型，CoAP协议使用请求/响应模型；</p>
+<p>MQTT会通过网关在客户机之间创建连接，CoAP协议则是无连接协议；</p>
+<p>MQTT通过中间代理传递消息的多对多协议，CoAP协议是Server和Client之间消息传递的单对单协议；</p>
+<p>MQTT不支持带有类型或者其它帮助Clients理解的标签消息，CoAP内置内容协商和发现支持，允许设备彼此窥测以找到交换数据的方式。</p>
+<h2 id="工作频段">工作频段</h2>
+<p>无线电频谱作为一种资源，由国家统一分配。相比于其它的LPWAN技术，NBIOT的一大优势就是它运行于授权频段，拥有较少的频段干扰，可以提供更好的服务质量。NB-IOT沿用LTEd定义的标准，能与现有的蜂窝网络基站融合快速部署，全球主流的部署频段是800MHz和900MHz，在中国，中国电信将NB-IOT部署在800MHz的频段上，而中国移动和中国联通则把NB-IOT部署在900MHz的频段上。</p>
+<table>
+<caption>运营商band分配</caption>
+<tbody>
+<tr class="odd">
+<td align="center">频段</td>
+<td align="center">中心频率</td>
+<td align="center">上行频率</td>
+<td align="center">下行频率</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center"></td>
+<td align="center">(MHZ)</td>
+<td align="center">(MHZ)</td>
+<td align="center">(MHZ)</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center">Band 5</td>
+<td align="center">850</td>
+<td align="center">824-849</td>
+<td align="center">869-894</td>
+<td align="center">中国电信</td>
+</tr>
+<tr class="even">
+<td align="center">Band 8</td>
+<td align="center">900</td>
+<td align="center">880-915</td>
+<td align="center">925-960</td>
+<td align="center"></td>
+</tr>
+</tbody>
+</table>
+<p>[运营商band分配]</p>
+<h2 id="部署方式">部署方式</h2>
+<p>NB-IOT支持独立、带内、保护频段三种部署方式。 独立部署是指在LTE的频段外选择独立的空闲频段部署，比如部署在GSM频段，并加上保护频段，能避免与LTE信号相互干扰，但这种方式对紧张的无线电频段资源不友好； 带内部署是指选择现有LTE系统内的一个PRB(Physical Resource Block)部署，但需要考虑到与LTE系统的干扰问题<span class="citation"></span>； 保护带部署是指利用LTE系统内尚未被利用的位于保护带的PRB，该种方式提高了无线电资源的利用率，但需要选取大于NB-IOT系统需要的200Khz带宽。 三种部署方式如图[部署方式]</p>
+<div class="figure">
+<img src="部署方式.png" alt="部署方式" width="302" />
+<p class="caption">部署方式<span data-label="部署方式"></span></p>
+</div>
+<h2 id="物理层协议">物理层协议</h2>
+<p>NBIOT上行采用SC-FDMA多址方式，使用多载波和单载波两种传输方式。多载波适用于LTE相同的15khz子载波间隔，对应不同的速率场景，0.5ms时隙，1ms子帧长度，每个时隙包含7个符号</p>
+<p>下行则是采取的OFDMA多址方式</p>
+<h2 id="本章小结">本章小结</h2>
+<p>本章主要阐述了以下内容：</p>
+<p>用于控制通信模块的AT指令集的四种类型指令的格式，分别为测试、读取、写以及执行指令。第四章实验部分将通过AT指令控制模块完成入网以及通信过程。</p>
+<p>还有NB-IOT的工作状态切换以及用于物联网应用的应用层协议，了解对物联网应用开发需要注意的实时性与能耗取舍的问题。</p>
+<p>然后通过NB-IOT系统的部署方式及物理层协议对NB-IOT通信技术有更深的理解。</p>
+<h1 id="nb-iot通信模块设计">NB-IOT通信模块设计</h1>
+<h2 id="模块总体介绍">模块总体介绍</h2>
+<p>上海移远通信技术有限公司开发的bc35G通信模组支持 band8、band5、band20、band28频段，采用LCC贴片封装，尺寸为19.9mm*23.6mm*2.2mm，完全符合欧盟RoHs标准<span class="citation"></span>,外部参数如下：</p>
+<table>
+<caption>模块参数</caption>
+<thead>
+<tr class="header">
+<th align="left">参数</th>
+<th align="left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">供电</td>
+<td align="left">3.1V 4.2V，典型电压3.6V</td>
+</tr>
+<tr class="even">
+<td align="left">省电</td>
+<td align="left">PSM模式下最大耗流 5uA</td>
+</tr>
+<tr class="odd">
+<td align="left">发射功率</td>
+<td align="left">23dBm +- 2dB</td>
+</tr>
+<tr class="even">
+<td align="left">温度范围</td>
+<td align="left">正常工作温度: -35‘c +75’C<br />
+</td>
+</tr>
+</tbody>
+</table>
+<p>[模块参数]</p>
+<p>模块的主要部分包括射频前端、电源管理、基带芯片。</p>
+<p>射频前端主要包括功率放大器、滤波器，用于无线电信号和二进制信号的互相转换。</p>
+<p>基带芯片则是用于信号处理，bc35G模块使用的是华为bionic系列芯片。</p>
+<h2 id="供电">供电</h2>
+<p>为了将锂离子电池电压转化为模块供电电压3.1v 4.2v，选用低压降线性稳压器(LDO)，具有成本低，噪音低的优点。同时由于对电池能量损耗低，保证更长的工作时间。在靠近模块的VBAT输入端，并联一个100uF的钽电容C1，以及100nF、100pF和22pF的滤波电容。同时为了提高模块承受浪涌电压的能力，在VBAT输入端增加一个TVS管D1。 输入端参考电路如图[VBAT]：</p>
+<div class="figure">
+<img src="VBAT.png" alt="VBAT" width="377" />
+<p class="caption">VBAT<span data-label="VBAT"></span></p>
+</div>
+<h2 id="串口">串口</h2>
+<p>bc35g模块提供两对串口，分别为主串口和调试串口。主串口用于AT命令的通信、数据传输，在Active、Idle和PSM模式下均可工作。模块作为DCE，连接方式为：（TODO：图片：DCT-DTE连接） 通过RS323电平转化芯片与MCU连接，为了降低串口功耗，在模块和主机之间加上1k欧姆电阻用于降低串口电流(TODO:RS232连接图)</p>
+<h2 id="射频模块">射频模块</h2>
+<p>BC35G天线部分预留了pi型匹配电路如图[ANT],以便对天线性能调节。C1和C2两个电容将大多数交流成分滤除，R1为0欧电阻，充当pi型RC滤波电路的电感。为了确保射频信号的性能以及可靠性，需要遵循pi型匹配电路的layout。既要保证电容电感布局靠近，也要防止出现stub<span class="citation"></span></p>
+<div class="figure">
+<img src="ANT.png" alt="ANT" width="377" />
+<p class="caption">ANT<span data-label="ANT"></span></p>
+</div>
+<h2 id="usim卡座">USIM卡座</h2>
+<p>支持3GPP规范功能的USIM卡能接入运营商网络，USIM功能包括模块和卡座，为了确保USIM卡的性能以及避免与射频、电源模块的干扰，须遵循以下设计原则：</p>
+<ol>
+<li><p>卡座和模块尽量靠近，信号线不超过200mm保证信号品质</p></li>
+<li><p>信号线远离RF走线及VBAT</p></li>
+<li><p>防止USIM_DATA和USIM_CLK信号干扰，两线之间加入地屏蔽</p></li>
+<li><p>USIM_DATA, USIM_VDD, USIM_CLK, 和USIM_RST并联33pF电容滤除RF干扰</p></li>
+<li><p>为了防止静电，在卡座和模块之间增加TVS管</p></li>
+</ol>
+<p>USIM卡使用内部电源3v供电，引脚定义如下</p>
+<p>USIM卡座电路图如[USIM]</p>
+<div class="figure">
+<img src="USIM.png" alt="USIM" width="377" />
+<p class="caption">USIM<span data-label="USIM"></span></p>
+</div>
+<h2 id="本章小结-1">本章小结</h2>
+<p>本章讨论了BC35G模块的外围电路设计，包括USIM卡座、电源、天线以及串口，主要关注于各部分之间的信号干扰避免，通过合理使用滤波电容，不同部分在电路板上的位置的相对远离，以达到良好的射频信号性能以及可靠性。同时通过TVS管等方式降低电涌对设备的损害。</p>
+<h1 id="模块验证与实验">模块验证与实验</h1>
+<p>基于NB-IOT的中断应用大致分为4类，分别是固定上报类，固定控制类，移动上报类和移动控制类。不同类别的应用因为数据的实时性、数据量、部署环境等的不同，对网络以及电源的需求也不同。例如对于固定控制类，由于设备部署位置固定，常有外部电源支持，需要较强的实时性，所以对功耗需求不高，需要模块时刻保持在线状态。接下来将以一个固定上报类终端对bc35g模块进行验证。终端硬件连接如图[硬件连接]</p>
+<div class="figure">
+<img src="硬件连接.png" alt="硬件连接" width="340" />
+<p class="caption">硬件连接<span data-label="硬件连接"></span></p>
+</div>
+<h2 id="华为云平台应用开发">华为云平台应用开发</h2>
+<p>华为 OceanConnect物联网平台作为一个连接业务应用和物联网设备的中间层，提供了海量设备接入管理，屏蔽复杂的设备接口，可以快速构筑物联网应用。</p>
+<h3 id="定义产品">定义产品</h3>
+<p>产品是指一类具备相同能力和特征的设备，一个产品包含产品模型、编解码插件等资源。选用CoAp协议，由于使用JSON的数据格式对能耗消耗太大，不适用于物联网设备，所以选用二进制码流的数据格式，通过开发编解码插件解析。</p>
+<div class="figure">
+<img src="oc产品.png" alt="oc产品定义" width="302" />
+<p class="caption">oc产品定义<span data-label="oc产品"></span></p>
+</div>
+<h3 id="定义profile与编解码插件">定义profile与编解码插件</h3>
+<p>profile是描述产品设备信息的文件，定义了设备与应用服务器交互的字段及格式。其主要包含产品信息、服务能力以及维护能力。</p>
+<p>实验设备资源主要使用了两个发光二级管以及一个无源蜂鸣器，支持两种操作，分别是触发设备上报设备资源状态和设置设备资源状态，因此定义profile文件如表[profile格式]:</p>
+<p><span>|c|c|c|c|c|</span><br />
+属性名称 &amp; 类型 &amp; 取值 &amp;<br />
+led0 &amp; int &amp; 0～1 &amp;<br />
+led1 &amp; int &amp; 0～1 &amp;<br />
+beep &amp; int &amp; 0～1 &amp;<br />
+<br />
+命令名称 &amp; 字段属性 &amp; 字段名 &amp; 取值 &amp; 描述<br />
+&amp; 请求 &amp; num &amp; 1-3 &amp; 资源编号<br />
+&amp;请求&amp;state&amp;0-1&amp;资源状态<br />
+query_resouce &amp; 请求 &amp; num &amp; 1-3 &amp; 资源编号<br />
+</p>
+<p>[profile格式]</p>
+<p>二进制数据格式需要编解码插件才能解析，在oc平台上设置好profile 文件后，将相应属性值与消息模板中的字段相连接，oc平台将会自动生成编解码器，同时也需要在设备端实现一致的编解码逻辑。</p>
+<p>实验设备涉及到的消息有三类，分别是设备上报消息(resource_info)、资源设置消息(set_info)和触发上报命令(query_resource)，消息内容如图[消息模板]:</p>
+<table>
+<caption>消息模板</caption>
+<thead>
+<tr class="header">
+<th align="center">消息类型</th>
+<th align="center">字段名称</th>
+<th align="center">数据类型</th>
+<th align="center">偏移量</th>
+<th align="center">字段解释</th>
+<th align="center">消息解释</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center"></td>
+<td align="center">messageId</td>
+<td align="center">uint8</td>
+<td align="center">0-1</td>
+<td align="center">消息类型编号：2</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center"></td>
+<td align="center">led0</td>
+<td align="center">uint8</td>
+<td align="center">1-2</td>
+<td align="center">led0 状态</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center"></td>
+<td align="center">led1</td>
+<td align="center">uint8</td>
+<td align="center">2-3</td>
+<td align="center">led1 状态</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center"></td>
+<td align="center">beep</td>
+<td align="center">uint8</td>
+<td align="center">3-4</td>
+<td align="center">beep 状态</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center"></td>
+<td align="center">messageId</td>
+<td align="center">uint8</td>
+<td align="center">0-1</td>
+<td align="center">消息类型编号：0</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center"></td>
+<td align="center">num</td>
+<td align="center">uint8</td>
+<td align="center">1-2</td>
+<td align="center">需要控制的资源编号</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center"></td>
+<td align="center">state</td>
+<td align="center">uint8</td>
+<td align="center">2-3</td>
+<td align="center">资源状态</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center"></td>
+<td align="center">messageId</td>
+<td align="center">uint8</td>
+<td align="center">0-1</td>
+<td align="center">消息类型编号：1</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center"></td>
+<td align="center">num</td>
+<td align="center">uint8</td>
+<td align="center">1-2</td>
+<td align="center">需要上报的资源编号</td>
+<td align="center"></td>
+</tr>
+</tbody>
+</table>
+<p>[消息模板]</p>
+<h3 id="接入设备">接入设备</h3>
+<p>通过串口连接设备，使用AT+CSGB=1命令查询设备IMEI号，在oc平台上增加设备，并从oc平台获取CoAP接入地址[oc接入方式]，以作为NCDP参数。</p>
+<div class="figure">
+<img src="oc接入方式.png" alt="oc接入方式" width="566" />
+<p class="caption">oc接入方式<span data-label="oc接入方式"></span></p>
+</div>
+<h2 id="stm32终端开发">stm32终端开发</h2>
+<p>stm32终端选择一块搭载stm32f103zet的开发板，板载4组串口，第一组可用于USB通信。本次验证使用到其中第二组串口，对应引脚为PA2和PA3。使用无源蜂鸣器及一组发光二极管，作为控制量，对应引脚为PB8，PB5，PE5。使用key0-3，对应引脚为PE2，PE3，PE4。</p>
+<p>key0-3用作外部中断输入，分别对应模块的初始化、重连和退网，led和无源蜂鸣器用作被操控的系统资源，串口用于控制通信模块。</p>
+<h3 id="串口dma通信">串口DMA通信</h3>
+<p>stm32开发板控制bc35g模块是通过串口的方式，bc35g串口比特率为9600。为了接收变长的串口数据，可以有以下几种方式：</p>
+<p>BC35G模块串口传输数据以’lr cr’为分隔符，以软件的方式，设置超时接收固定长度并以’lr cr’分割，放入缓冲区中。由于模块涉及网络操作等原因，不同AT指令的响应时间有很大差距，所以超时时间不好确定，同时由于MCU等待模块输入，对效率影响较大。</p>
+<p>利用定时器中断方式可以解决超时时间设置的问题。一个字节的数据有 起始位+数据+结束位共10位，在模块串口比特率为9600的情况下，传输一个字节需要104us。同时由于两组数据之间需要间隔3.5字符，可以设置定时器中断为5ms。在串口接收中断服务函数中开启定时器中断，每接收一个字符则重置定时器，当定时器超时时可以认为一组数据接收完毕，在定时器中断函数中将接收到的数据放入缓存中。但是由于是一字节一字节接收，而且MCU仍然参与接收过程，所以效率仍有提升必要。</p>
+<p>为了进一步提升效率，可以使用DMA方式接收数据。为了区分两组数据，开启总线空闲中断，当DMA传输完毕时触发总线空闲中断，在总线空闲中断中标记数据就绪。DMA方式能获得更好的效率。</p>
+<pre><code>/* uart.c
+* 检测空闲中断，标记缓存数据可用
+*/
+
+uint8_t UART2DATAREADY = 0;
+uint8_t UART2RXBUFFER[UART_BUFFER_SIZE];
+
+void USER_UART_IRQHandler(UART_HandleTypeDef *huart) {
+    if (huart == &amp;huart2) {
+        if (RESET != __HAL_UART_GET_FLAG(&amp;huart2, 
+                UART_FLAG_IDLE)) {
+            __HAL_UART_CLEAR_IDLEFLAG(&amp;huart2);
+            HAL_UART_DMAStop(&amp;huart2);
+            UART2DATAREADY = UART_BUFFER_SIZE - 
+            __HAL_DMA_GET_COUNTER(&amp;hdma_usart2_rx);
+        }
+    }
+}
+
+/* nbiot.c
+* 封装AT指令执行模块，接收模块串口回传数据
+*/
+func NBCommand(AT_command) {
+    UART_Transmit(AT_command);
+    HAL_UART_Receive_DMA(&amp;huart2, 
+                        UART2RXBUFFER, 
+                        UART_BUFFER_SIZE);
+    Delay(100); //降低UART2DATAREADY datarace概率
+    while (!UART2DATAREADY) {
+        HAL_Delay(50);
+    }
+    data=UART2RXBUFFER;
+    UART2DATAREADY = 0;
+    return data;
+}</code></pre>
+<h3 id="初始化及入网">初始化及入网</h3>
+<p>BC35G模块初始化需要设置云平台CoAP协议接入地址，根据USIM卡设置运营商频段。同时为了达到固定控制类应用对时延的要求，也需要关闭省电模式。为了更清晰简单的与服务端交互数据，也许关闭串口数据自动上报。最终触发入网并查询入网状态，需要执行的流程及AT指令如图[入网流程]</p>
+<div class="figure">
+<img src="入网流程.png" alt="入网流程" width="491" />
+<p class="caption">入网流程<span data-label="入网流程"></span></p>
+</div>
+<p>如果入网失败，可以尝试重连，重练操作序列如图[入网重试]</p>
+<div class="figure">
+<img src="入网重试.png" alt="入网重试" width="491" />
+<p class="caption">入网重试<span data-label="入网重试"></span></p>
+</div>
+<p>当设备不处于第一次开机的流程，入网操作只需要打开射频功能以及触发入网，如图</p>
+<h3 id="模组通信">模组通信</h3>
+<p>bc35g模块涉及消息发送与接收的有如下四个命令：</p>
+<table>
+<caption>bc35g模块收发命令</caption>
+<tbody>
+<tr class="odd">
+<td align="center">命令</td>
+<td align="center">描述</td>
+</tr>
+<tr class="even">
+<td align="center">AT+NMGS=&lt;length&gt;,&lt;data&gt;</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center">AT+NIMI=0/1</td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="center">AT+NQMGR</td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="center">AT+NMGR</td>
+<td align="center"></td>
+</tr>
+</tbody>
+</table>
+<p>[tablea]</p>
+<p>如果开启自动上报，则服务器下发内容有可能与串口控制消息重叠，需要消耗额外资源去提取。同时由于固定控制类应用对延时要求较高，所以关闭自动上报，定时轮询缓存中是否有接收到新消息。</p>
+<pre><code>
+//nbiot.c
+func readMsg(){
+    received=NBCommand(&quot;AT+NQMGR&quot;)
+    for read to received{
+        data+=NBCommand(&quot;AT+NMGR&quot;)
+    }
+    data+=&quot;command_end&quot;
+    read=received;
+    return data;
+}
+
+//main.c
+while(1){
+    Delay(1000);
+    data=readMsg();
+    process(data);
+}</code></pre>
+<h3 id="退网关机">退网关机</h3>
+<p>当设备关机时需要释放与运营商的连接，须执行以下序列[模块关机]</p>
+<div class="figure">
+<img src="模块关机.png" alt="模块关机" width="264" />
+<p class="caption">模块关机<span data-label="模块关机"></span></p>
+</div>
+<h2 id="验证过程以及结论">验证过程以及结论</h2>
+<p>首先使用PC串口通信的方式，控制模块通信操作，使用的AT指令以及结果如图[PC命令行实验]:</p>
+<div class="figure">
+<img src="PC命令行实验.png" alt="PC命令行实验" width="377" />
+<p class="caption">PC命令行实验<span data-label="PC命令行实验"></span></p>
+</div>
+<p>设备未入网时LED全灭,华为OC平台显示设备离线，两者状态如图[设备离线端]、图[设备离线]</p>
+<div class="figure">
+<img src="设备离线端.png" alt="设备离线端" width="264" />
+<p class="caption">设备离线端<span data-label="设备离线端"></span></p>
+</div>
+<div class="figure">
+<img src="设备离线.png" alt="设备离线" width="264" />
+<p class="caption">设备离线<span data-label="设备离线"></span></p>
+</div>
+<p>入网成功后，红色LED0亮起，华为OC平台显示设备上线</p>
+<div class="figure">
+<img src="设备离线端.png" alt="设备上线端" width="264" />
+<p class="caption">设备上线端<span data-label="设备上线端"></span></p>
+</div>
+<div class="figure">
+<img src="设备离线.png" alt="设备上线" width="264" />
+<p class="caption">设备上线<span data-label="设备上线"></span></p>
+</div>
+<p>通过下发控制命令开启、关闭LED灯和触发设备信息上报，设备端和云端状态如下：</p>
+<div class="figure">
+<img src="发送开灯.png" alt="发送开灯" width="264" />
+<p class="caption">发送开灯<span data-label="发送开灯"></span></p>
+</div>
+<div class="figure">
+<img src="发送开灯端.png" alt="发送开灯端" width="264" />
+<p class="caption">发送开灯端<span data-label="发送开灯端"></span></p>
+</div>
+<div class="figure">
+<img src="设备上报.png" alt="设备上报" width="264" />
+<p class="caption">设备上报<span data-label="设备上报"></span></p>
+</div>
+<h2 id="本章小结-2">本章小结</h2>
+<p>本章通过简单模拟一个固定控制类应用，在STM32开发板上实现对BC35G模块的通信控制，通过CoAP协议，完成查询、上报、控制资源状态三种消息类型的传输，验证了BC35G模块的功能</p>
+<h1 id="全文总结与展望">全文总结与展望</h1>
+<h2 id="全文总结">全文总结</h2>
+<p>本文详细介绍了NBIOT通信协议以及模块外围电路设计相关内容，并通过相关验证使用stm32开发板验证了bc35g模块的通信操作以及使用，相关代码可在github<span class="citation"></span>获取</p>
+<h2 id="后续工作展望">后续工作展望</h2>
+<p>模块的实际设计与开发需要投入不少资源用于生产试错的过程，就如FPGA的出现为芯片设计提供了极大地便利一样，SDR(Software Defined Radio)通过软件来模拟传统的硬连线方式实现无线电通信，只需使用不同的软件就能在通用PC上实现一个通信模块具有的功能，不仅方便了无线电爱好者低成本的探索无线电世界，对于通信协议的研究也提供了快捷的方式。预期通过对通信原理的深入学习，可以实现用于gnuradio的NB-IOT插件，更加方便对NB-IOT技术的学习。</p>
+<p>非常感谢鲁晓军老师在毕设期间提供的悉心指导和检查老师认真负责提出的修改意见。</p>
+<h1 id="abc">abc</h1>
+<h2 id="abc-1">abc</h2>
+<h2 id="the-ofdm-model-of-multiple-carrier-waves">The OFDM Model of Multiple Carrier Waves</h2>
+<h2 id="基于多载波索引键控的正交频分多路复用系统模型">基于多载波索引键控的正交频分多路复用系统模型</h2>
