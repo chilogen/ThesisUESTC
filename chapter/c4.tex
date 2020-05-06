@@ -189,9 +189,58 @@ query\_resouce & 请求 & num & 1-3 & 资源编号 \\
 stm32终端选择一块搭载stm32f103zet的开发板，板载4组串口，第一组可用于USB通信。本次设计使用到其中第二组串口，对应引脚为PA2和PA3。使用无源蜂鸣器及一组发光二极管，作为设备终端的资源，
 对应引脚为PB8，PB5，PE5。使用key0-3，作为外部中断输入，对应模块的初始化、重连和退网，对应引脚为PE2，PE3，PE4。
 
+\subsection{前后台程序}
+为了管理运行在MCU上的不同任务，比如数据的发送接受，资源的操作，可以使用成熟的操作系统比如usos管理多任务，也可以使用前后台加中断的方式管理。
 
-\subsection{代码设计}
-由于通过串口控制BC35G模块运行既是通过发送一系列AT指令，这些指令序列有重复性和相似性，所以将指令视为单元，通过单元的组合完成一个设备功能，比如初始化入网、入网重试、接收消息、发送消息。
+在前后台系统的设计中，主应用程序是一个无限循环，可以看做是后台程序，掌管整个系统资源的分配管理和任务调度。为了达成较高的实时性系统要求，前台程序一般只在中断服务程序中标记时间的发生，不做其它多余的操作。
+同时具体到stm32嵌入式开发使用的系统HAL库，因为系统时钟中断使用的最低优先级，如果阻塞在前台程序的中断服务函数中，会造成系统时钟失效，甚至永久阻塞。
+
+以模块的入网初始化、入网重连和模块关机事件为例，通过外部中断的方式接受按键输入，在中断服务程序中标记入网初始化、入网重连和模块关机事件的发生，在后台中调用相应的事件处理函数执行，代码如下：
+
+\begin{lstlisting}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if(!initComplete){
+        return;
+    }
+
+    switch (GPIO_Pin) {
+        case GPIO_PIN_2: {
+            moduleInit = 1;
+            break;
+        }
+        case GPIO_PIN_3: {
+            moduleReconnect = 1;
+            break;
+        }
+        case GPIO_PIN_4: {
+            moduleClose = 1;
+            break;
+        }
+        default: {
+        }
+    }
+}
+
+void main()}{
+  while (1) {
+        if (moduleInit) {
+            NBInit();
+            moduleInit = 0;
+        }
+        if (moduleClose) {
+            NBClose();
+            moduleClose = 0;
+        }
+  }
+}
+\end{lstlisting}
+
+然而实际上，前后台系统的实时性并不能达到理想状态，这是由于没有为不同任务分配优先级，一般采用FIFO的方式调度。但因为按键触发初始化入网、入网重试、接收消息、发送消息等任务实际上并不会有极高的使用概率和实时性要求，接受和发送
+消息任务都是读取写入BC35G模块的flash，所以使用前后台程序能够满足需求，并降低复杂性。
+
+\subsection{指令单元序列}
+由于通过串口控制BC35G模块运行既是通过发送一系列AT指令，这些指令序列有重复性和相似性，所以将指令视为单元，通过单元的串联组合完成一个设备功能，比如初始化入网、入网重试、接收消息、发送消息。
 以模组关机为例，需要执行关闭网络(\_\_NB\_NETCLOSE)和关闭射频单元(\_\_NB\_CloseCFun)操作，两个操作组合形成功能NBClose，如此能极大方便新功能的增加和旧功能的维护，代码如下：
 
 \begin{lstlisting}
@@ -301,7 +350,7 @@ BC35G模块初始化需要首先使用AT+NCDP=<ip,port>命令设置云平台CoAP
 同时为了达到固定控制类应用对时延的要求，需要使用AT+CEDRXS=0,5和AT+CPMS=0关闭edrx和省电模式PSM。
 
 模块默认开启数据自动上报，当接收到物联网平台消息是就会自动通过串口上报。由于为了避免与stm32的控制消息在串口结合在一起后期分离不变，所以使用AT+NNMI关闭串口数据自动上
-报，定时按需使用AT+NQMGR和AT+NMGR从缓存中获取消息。
+报，根据NBIOT的drx模式，定时按需使用AT+NQMGR和AT+NMGR从缓存中获取消息。
 最终触发入网并查询入网状态，需要执行的流程及AT指令如图\ref{入网流程}
 
 \begin{figure}[H]
@@ -337,10 +386,10 @@ AT+NQMGR & \makecell[l]{查询自开机以来接收到的消息状态} \\
 AT+NMGR & \makecell[l]{读取缓存中最早一条未被未被处理的消息} \\
 \bottomrule
 \end{tabular}
-\label{tablea}
+\label{bc35g模块收发ta}
 \end{table}
 
-如果开启自动上报，则服务器下发内容有可能与串口控制消息重叠，需要消耗额外资源去提取。同时由于固定控制类应用对延时要求较高，所以关闭自动上报，定时轮询缓存中是否有接收到新消息。
+如果开启自动上报，则服务器下发内容有可能与串口控制消息重叠，需要消耗额外资源去提取。为了节约系统消耗，所以关闭自动上报，简单定时轮询缓存中是否有接收到新消息。
 
 \begin{lstlisting}
 
@@ -363,6 +412,37 @@ while(1){
 }
 \end{lstlisting}
 
+\subsection{编解码插件}
+由于华为物联网平台暴露给应用服务器的Restful接口使用的是json格式数据，需要使用编解码插件将设备终端的二进制数据转换为json数据。因此，也需要在设备终端上将自定义结构数据编码为华为物联网平台编解码插件输入格式相同的二进制数据。
+根据在华为物联网平台上定义的消息模板\ref{消息模板}，该二进制数据格式为: payload = hex(<length><messageid><data>)，length和messageid都为uint8类型，所以各占两个char,data 按照偏移量排列，初始值为‘00’，因此定义三种消息结构体分别对应
+模块上报消息（HWOCReportMSG）、模块控制消息（HWOCSetMSG）和模块查询消息（HWOCQueryMSG），同时还有处理中间消息（HWOCMSG）如下：
+
+\begin{lstlisting}
+typedef struct {
+    uint8_t msgId;
+    uint8_t led0;
+    uint8_t led1;
+    uint8_t beep;
+}HWOCReportMSG;
+
+typedef struct {
+    uint8_t msgId;
+    uint8_t num;
+    uint8_t state;
+}HWOCSetMSG;
+
+typedef struct {
+    uint8_t msgID;
+    uint8_t num;
+}HWOCQueryMSG;
+
+typedef struct  {
+    uint8_t msgId;
+    uint8_t *data;
+}HWOCMSG;
+\end{lstlisting}
+
+
 
 \subsection{退网关机}
 
@@ -376,8 +456,53 @@ while(1){
 
 \section{验证过程以及结论}
 
-首先使用PC串口通信的方式，控制模块通信操作，使用的AT指令以及结果如图\ref{PC命令行实验}:
+\subsection{PC串口通信验证}
+BC35G模块通过NBC连接PC,为了使操作系统能够识别USB转TTL转接模块，需要安装CH341芯片驱动。CH341是沁恒公司生产的一款USB总线转接芯片，实现了通过USB总线提供异步串口、并口、打印口和常用的同步串行接口，在其
+官网上提供驱动源码下载，编译后以内核模块的方式加载到操作系统中，安装步骤如下：
+\begin{enumerate}
+\item 在沁恒公司官网（www.wch.cn/download/CH341SER\_LINUX\_ZIP.html）下载CH341ESR\_LINUX.ZIP并解压
+\item 进入源码目录执行编译 make load 生成ch341.ko内核模块
+\item 使用insmod命令加载ch341.ko模块
+\item 使用dmesg查看内核日志输出，在已插入USB转TTL转接模块的情况下，内核日志中显示识别设备为ttyUSB0如图\ref{ch341驱动加载}，在 /dev 设备中同样可以看见转接设备如图\ref{devusb0}
+\end{enumerate}
 
+\begin{figure}[H]
+    \centering
+	\includegraphics[width=10cm]{ch341驱动加载.png}
+	\caption{ch341驱动加载}
+	\label{ch341驱动加载}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+	\includegraphics[width=10cm]{devusb0.png}
+	\caption{devusb0}
+	\label{devusb0}
+\end{figure}
+
+minicom是linux下的一款串口通信软件，类似windows的超级终端，可用于调试交换机等串口设备，源中已经包含了minicom软件包，使用apt install minicoom即可安装。
+安装完毕后，使用 minicom -s 配置串口为 /dev/ttyUSB0，并设置比特率为9600bps，即可与bc35g模块通信。
+
+按顺序执行以表\ref{PCAT指令实验}AT指令，即可完成向华为物联网平台发送消息的功能，执行效果如图\ref{PC命令行实验}
+
+\begin{table}[h]
+\caption{PCAT指令实验}
+\begin{tabular}{|l|l|}
+\toprule
+命令 & 描述 \\
+AT & \makecell[l]{查询模块状态，模块就绪返回 OK} \\
+AT+NCONFIG=AUTOCONNECT,true & \makecell[l]{开启手动配置入网} \\
+AT+NCDP=49.4.85.232,5683 & \makecell[l]{设置华为物联网平台CoAP接入地址} \\
+AT+NRB & \makecell[l]{重启设备} \\
+AT+NBAND=5 & \makecell[l]{设置运行频段为移动频段band5} \\
+AT+NNMI=1& \makecell[l]{开启模块自动上报，模块接收到消息是会自动发往串口} \\
+AT+CFUN=1 & \makecell[l]{打开射频功能，准备入网} \\
+AT+CGATT=1 & \makecell[l]{触发开始入网} \\
+AT+CGATT? & \makecell[l]{查询入网状态，入网成功返回1} \\
+\bottomrule
+\end{tabular}
+\label{PCAT指令实验}
+\end{table}
 
 \begin{figure}[H]
     \centering
@@ -386,7 +511,20 @@ while(1){
 	\label{PC命令行实验}
 \end{figure}
 
-设备未入网时LED全灭,华为OC平台显示设备离线，两者状态如图\ref{设备离线端}、图\ref{设备离线}
+\subsection{开发板实验}
+
+编译代码生成二进制固件后，需要将其烧写进开发版内存。openocd是一个由Dominic Rath创建的嵌入式调试工具，需要配合调试适配器，比如JTAG,SWD等。其同样可以用于固件下载更新。
+由于MCU是stm32f103zet，使用的调试适配器为stlink v2，需要编写openocd配置文件如下,以选择配置stlink v2 调试适配器和stm32f1x系列起始地址等内容。
+\begin{lstlisting}
+# config
+source [find interface/stlink-v2.cfg]
+transport select hla_swd
+source [find target/stm32f1x.cfg]
+reset_config srst_only
+\end{lstlisting}
+然后使用命令 openocd -f config -c <binary>.elf 将固件下载到开发板上。
+
+系统初始化时LED处于关闭状态,华为物联网平台显示设备离线，两者状态如图\ref{设备离线端}、图\ref{设备离线}
 
 \begin{figure}[H]
     \centering
@@ -403,7 +541,8 @@ while(1){
 	\label{设备离线}
 \end{figure}
 
-入网成功后，红色LED0亮起，华为OC平台显示设备上线
+入网需要大概40s到90s,入网成功后，红色LED0亮起,在设备终端表示入网成功，设备初始化完成，同时华为物联网平台也显示设备上线，可以进行数据收发和控制操作。
+此时终端设备的状态如图\ref{设备上线端}，华为物联网平台状态如图\ref{设备上线}
 \begin{figure}[H]
     \centering
 	\includegraphics[width=7cm]{设备离线端.png}
